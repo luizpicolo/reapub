@@ -26,6 +26,11 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
+      path: '/users',
+      component: () => import('../views/UsersView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/feed/local',
       redirect: '/feed?feed=local',
       meta: { auth: true },

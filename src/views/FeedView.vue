@@ -1,113 +1,120 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { Globe2, House, Network, RefreshCw, Users, UserPlus, ExternalLink } from 'lucide-vue-next'
 import {
-  ArrowRight,
-  FileText,
-  Globe2,
-  House,
-  Network,
-  RefreshCw,
-  ShieldCheck,
-  Users,
-} from 'lucide-vue-next'
-import { getCurrentUser, getFollowing, listFeed } from '../api'
-import type { FeedType, FederationPlatform, Publication, User } from '../types'
+  accountHost,
+  accountInstanceUrl,
+  getPleromaGlobalTimeline,
+  getPleromaHomeTimeline,
+  getPleromaLocalTimeline,
+  getPleromaFollowingAccounts,
+  getRemoteInstanceTimeline,
+  type PleromaAccount,
+  type PleromaTimelineStatus,
+  resolvePleromaMediaUrl,
+} from '../api/pleroma'
+import type { FeedType } from '../types'
 
 const route = useRoute()
 const router = useRouter()
-
-const items = ref<Publication[]>([])
-const following = ref<FederationPlatform[]>([])
-const currentUser = ref<User | null>(null)
+const items = ref<PleromaTimelineStatus[]>([])
+const following = ref<PleromaAccount[]>([])
 const loading = ref(true)
+const error = ref('')
+const followedInstances = ref<Array<{
+  host: string
+  url: string
+  local: PleromaTimelineStatus[]
+  global: PleromaTimelineStatus[]
+  loading: boolean
+  error?: string
+}>>([])
 
-const feedOptions: Array<{
-  id: FeedType
-  label: string
-  description: string
-}> = [
-  {
-    id: 'local',
-    label: 'Local',
-    description: 'Publicações da sua própria plataforma.',
-  },
-  {
-    id: 'following',
-    label: 'Seguindo',
-    description: 'Publicações das plataformas que você segue.',
-  },
-  {
-    id: 'global',
-    label: 'Global',
-    description: 'Todos os recursos públicos disponíveis na federação.',
-  },
+const feedOptions: Array<{ id: FeedType; label: string; description: string }> = [
+  { id: 'local', label: 'Local', description: 'Posts publicados na instância configurada.' },
+  { id: 'following', label: 'Seguindo', description: 'Posts das pessoas que você segue, incluindo contas remotas.' },
+  { id: 'global', label: 'Global', description: 'Posts públicos conhecidos pela sua instância.' },
 ]
 
 const activeFeed = computed<FeedType>(() => {
   const requested = route.query.feed
-
-  if (requested === 'local' || requested === 'global' || requested === 'following') {
-    return requested
-  }
-
-  return 'following'
+  return requested === 'local' || requested === 'global' || requested === 'following' ? requested : 'following'
 })
+const activeOption = computed(() => feedOptions.find(item => item.id === activeFeed.value) || feedOptions[1])
 
-const activeOption = computed(() =>
-  feedOptions.find(option => option.id === activeFeed.value) ?? feedOptions[1],
-)
+function statusAccount(status: PleromaTimelineStatus) {
+  return status.reblog?.account || status.account
+}
 
-const feedTitle = computed(() => {
-  switch (activeFeed.value) {
-    case 'local':
-      return 'Feed local'
-    case 'global':
-      return 'Feed global'
-    case 'following':
-    default:
-      return 'Seguindo'
-  }
-})
+function postContent(status: PleromaTimelineStatus) {
+  const value = status.reblog?.content || status.content || ''
+  return value.replace(/<br\s*\/?>(\s*)/gi, '\n').replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
+}
+
+function hostForStatus(status: PleromaTimelineStatus) {
+  return accountHost(statusAccount(status))
+}
+
+function avatarUrl(status: PleromaTimelineStatus) {
+  return resolvePleromaMediaUrl(statusAccount(status).avatar)
+}
+
+function mediaPreviewUrl(url?: string) {
+  return resolvePleromaMediaUrl(url)
+}
 
 async function load() {
   loading.value = true
-
+  error.value = ''
   try {
-    const [publications, followedPlatforms, user] = await Promise.all([
-      listFeed(activeFeed.value),
-      getFollowing(),
-      getCurrentUser(),
-    ])
-
-    items.value = publications
-    following.value = followedPlatforms
-    currentUser.value = user
+    if (activeFeed.value === 'local') items.value = await getPleromaLocalTimeline(40)
+    else if (activeFeed.value === 'global') items.value = await getPleromaGlobalTimeline(40)
+    else items.value = await getPleromaHomeTimeline(40)
+    following.value = await getPleromaFollowingAccounts()
+    await loadFollowedInstanceTimelines()
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Não foi possível carregar o feed.'
+    items.value = []
   } finally {
     loading.value = false
   }
 }
 
-async function changeFeed(type: FeedType) {
-  await router.replace({
-    query: {
-      ...route.query,
-      feed: type,
-    },
-  })
+async function loadFollowedInstanceTimelines() {
+  const map = new Map<string, { host: string; url: string }>()
+  for (const account of following.value) {
+    const host = accountHost(account)
+    const url = accountInstanceUrl(account)
+    if (host && !map.has(host)) map.set(host, { host, url })
+  }
+  const entries = [...map.values()]
+  followedInstances.value = entries.map(item => ({ ...item, local: [], global: [], loading: true }))
+  await Promise.all(followedInstances.value.map(async entry => {
+    try {
+      const [local, global] = await Promise.all([
+        getRemoteInstanceTimeline(entry.url, true, 20),
+        getRemoteInstanceTimeline(entry.url, false, 20),
+      ])
+      entry.local = local
+      entry.global = global
+    } catch (err) {
+      entry.error = err instanceof Error ? err.message : 'Não foi possível carregar esta instância.'
+    } finally {
+      entry.loading = false
+    }
+  }))
+}
 
+async function changeFeed(type: FeedType) {
+  await router.replace({ query: { ...route.query, feed: type } })
   await load()
 }
 
 onMounted(load)
 
 function dateLabel(value: string) {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value))
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }
 </script>
 
@@ -118,27 +125,14 @@ function dateLabel(value: string) {
         <div class="section-head feed-head">
           <div>
             <div class="eyebrow">Sua rede federada</div>
-            <h2>{{ feedTitle }}</h2>
+            <h2>{{ activeOption.label }}</h2>
             <p>{{ activeOption.description }}</p>
           </div>
-
-          <button class="btn ghost" type="button" @click="load">
-            <RefreshCw :size="16" />
-            Atualizar
-          </button>
+          <button class="btn ghost" type="button" @click="load"><RefreshCw :size="16" /> Atualizar</button>
         </div>
 
         <div class="feed-tabs" role="tablist" aria-label="Tipos de feed">
-          <button
-            v-for="option in feedOptions"
-            :key="option.id"
-            class="feed-tab"
-            :class="{ active: activeFeed === option.id }"
-            type="button"
-            role="tab"
-            :aria-selected="activeFeed === option.id"
-            @click="changeFeed(option.id)"
-          >
+          <button v-for="option in feedOptions" :key="option.id" class="feed-tab" :class="{ active: activeFeed === option.id }" type="button" role="tab" :aria-selected="activeFeed === option.id" @click="changeFeed(option.id)">
             <House v-if="option.id === 'local'" :size="16" />
             <Users v-else-if="option.id === 'following'" :size="16" />
             <Globe2 v-else :size="16" />
@@ -146,157 +140,70 @@ function dateLabel(value: string) {
           </button>
         </div>
 
-        <div v-if="loading" class="card loading-box">
-          Carregando publicações…
-        </div>
-
+        <div v-if="error" class="status bad">{{ error }}</div>
+        <div v-if="loading" class="card loading-box">Carregando publicações…</div>
         <div v-else-if="!items.length" class="card empty-box">
           <Network :size="26" />
-          <strong>Nenhuma publicação encontrada</strong>
-          <p>
-            <template v-if="activeFeed === 'local'">
-              Sua plataforma ainda não possui publicações.
-            </template>
-            <template v-else-if="activeFeed === 'following'">
-              Siga algumas plataformas para receber novas publicações aqui.
-            </template>
-            <template v-else>
-              Ainda não há recursos públicos disponíveis na federação.
-            </template>
-          </p>
-          <RouterLink v-if="activeFeed === 'following'" class="btn primary" to="/federation">
-            Explorar plataformas
-          </RouterLink>
+          <strong>Nenhum post encontrado</strong>
+          <p v-if="activeFeed === 'following'">Siga usuários para montar seu feed pessoal.</p>
+          <p v-else>Não há posts públicos disponíveis neste momento.</p>
+          <RouterLink v-if="activeFeed === 'following'" class="btn primary" to="/users"><UserPlus :size="15" /> Encontrar pessoas</RouterLink>
         </div>
 
         <div v-else class="feed-list">
-          <article v-for="pub in items" :key="pub.id" class="card publication">
-            <div class="publication-header">
-              <div class="source-logo">
-                {{ pub.sourcePlatform.name.slice(0, 1) }}
+          <article v-for="status in items" :key="status.id" class="card social-post">
+            <div class="social-post-header">
+              <img v-if="statusAccount(status).avatar" class="post-avatar" :src="avatarUrl(status)" :alt="statusAccount(status).display_name || statusAccount(status).username" />
+              <span v-else class="post-avatar post-avatar-fallback">{{ (statusAccount(status).display_name || statusAccount(status).username).slice(0, 1) }}</span>
+              <div class="post-author">
+                <strong>{{ statusAccount(status).display_name || statusAccount(status).username }}</strong>
+                <span>@{{ statusAccount(status).acct }} · {{ dateLabel(status.created_at) }}</span>
               </div>
-
-              <div>
-                <strong>{{ pub.sourcePlatform.name }}</strong>
-                <div class="handle">
-                  {{ pub.sourcePlatform.handle }} · {{ dateLabel(pub.publishedAt) }}
-                </div>
-              </div>
-
-              <span class="federated-pill">
-                <Network :size="13" />
-                {{ pub.sourcePlatform.id === currentUser?.platform.id ? 'Local' : 'Federado' }}
-              </span>
+              <span class="post-instance">{{ hostForStatus(status) }}</span>
             </div>
-
-            <div class="publication-body">
-              <div class="eyebrow">Novo recurso</div>
-              <h3>{{ pub.resource.title }}</h3>
-              <p>{{ pub.resource.description }}</p>
-
-              <div class="resource-meta">
-                <span>
-                  <FileText :size="14" />
-                  {{ pub.resource.type }}
-                </span>
-                <span>{{ pub.resource.area }}</span>
-                <span>{{ pub.resource.license }}</span>
-              </div>
-
-              <div class="source-line">
-                <span>
-                  por <strong>{{ pub.actorName }}</strong>
-                </span>
-                <span class="verified">
-                  <ShieldCheck :size="14" />
-                  Autoria verificável
-                </span>
-              </div>
-            </div>
-
-            <div class="publication-actions">
-              <RouterLink class="btn primary" :to="`/resources/${pub.resource.id}`">
-                Ver recurso
-                <ArrowRight :size="15" />
-              </RouterLink>
-
-              <a
-                :href="pub.sourcePlatform.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="text-link"
-              >
-                Visitar plataforma de origem
+            <div class="social-post-content">{{ postContent(status) }}</div>
+            <div v-if="status.media_attachments?.length" class="post-media">
+              <a v-for="media in status.media_attachments" :key="media.id" :href="media.url" target="_blank" rel="noopener noreferrer">
+                <img v-if="media.type === 'image' && media.preview_url" :src="mediaPreviewUrl(media.preview_url)" :alt="media.description || media.filename || 'Anexo'" />
+                <span v-else><ExternalLink :size="14" /> {{ media.filename || 'Abrir anexo' }}</span>
               </a>
+            </div>
+            <div class="post-actions">
+              <a v-if="status.url" class="text-link" :href="status.url" target="_blank" rel="noopener noreferrer">Abrir publicação <ExternalLink :size="13" /></a>
             </div>
           </article>
         </div>
+
+        <section v-if="activeFeed === 'following' && followedInstances.length" class="followed-instances">
+          <div class="section-title-row">
+            <div><div class="eyebrow">Instâncias das pessoas seguidas</div><h2>Local e Global</h2><p>As linhas abaixo consultam as timelines públicas de cada instância encontrada entre as contas que você segue.</p></div>
+          </div>
+          <article v-for="instance in followedInstances" :key="instance.host" class="card instance-feed-card">
+            <div class="instance-feed-head">
+              <div><strong>{{ instance.host }}</strong><span>{{ instance.url }}</span></div>
+              <a class="text-link" :href="instance.url" target="_blank" rel="noopener noreferrer">Abrir instância →</a>
+            </div>
+            <div v-if="instance.loading" class="user-state">Carregando Local e Global…</div>
+            <div v-else-if="instance.error" class="status bad">{{ instance.error }}</div>
+            <div v-else class="instance-columns">
+              <div><h3><House :size="15" /> Local</h3><article v-for="status in instance.local" :key="`l-${status.id}`" class="mini-post"><strong>{{ status.account.display_name || status.account.username }}</strong><span>{{ postContent(status).slice(0, 180) }}</span></article><span v-if="!instance.local.length" class="muted">Sem posts locais retornados.</span></div>
+              <div><h3><Globe2 :size="15" /> Global</h3><article v-for="status in instance.global" :key="`g-${status.id}`" class="mini-post"><strong>{{ status.account.display_name || status.account.username }}</strong><span>{{ postContent(status).slice(0, 180) }}</span></article><span v-if="!instance.global.length" class="muted">Sem posts globais retornados.</span></div>
+            </div>
+          </article>
+        </section>
       </section>
 
       <aside>
         <div class="card side-card">
           <div class="eyebrow">Sua rede</div>
-          <h3>{{ following.length }} plataformas seguidas</h3>
-          <p>
-            As publicações dessas plataformas aparecem no feed <strong>Seguindo</strong>.
-          </p>
-
-          <RouterLink
-            v-for="platform in following"
-            :key="platform.id"
-            :to="`/federation/${platform.id}`"
-            class="mini-platform"
-          >
-            <span class="source-logo">
-              {{ platform.name.slice(0, 1) }}
-            </span>
-            <span>
-              <strong>{{ platform.name }}</strong>
-              <small>{{ platform.handle }}</small>
-            </span>
+          <h3>{{ following.length }} pessoas seguidas</h3>
+          <p>O feed <strong>Seguindo</strong> usa a timeline inicial da sua conta Pleroma.</p>
+          <RouterLink v-for="account in following.slice(0, 8)" :key="account.id" :to="{ path: '/users' }" class="mini-platform">
+            <img v-if="account.avatar" class="mini-avatar" :src="account.avatar" :alt="account.display_name || account.username" />
+            <span v-else class="source-logo">{{ (account.display_name || account.username).slice(0, 1) }}</span>
+            <span><strong>{{ account.display_name || account.username }}</strong><small>@{{ account.acct }}</small></span>
           </RouterLink>
-
-          <RouterLink class="btn ghost full" to="/federation/following">
-            Gerenciar seguindo
-          </RouterLink>
-        </div>
-
-        <div class="card side-card feed-help-card">
-          <div class="feed-help-item">
-            <House :size="18" />
-            <div>
-              <strong>Local</strong>
-              <p>Mostra apenas o que foi publicado na sua plataforma.</p>
-            </div>
-          </div>
-
-          <div class="feed-help-item">
-            <Users :size="18" />
-            <div>
-              <strong>Seguindo</strong>
-              <p>Mostra as publicações das plataformas que você acompanha.</p>
-            </div>
-          </div>
-
-          <div class="feed-help-item">
-            <Globe2 :size="18" />
-            <div>
-              <strong>Global</strong>
-              <p>Mostra todos os recursos públicos disponíveis na federação.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="card side-card">
-          <Network :size="21" />
-          <h3>Como a federação funciona?</h3>
-          <p>
-            Você segue plataformas e recebe suas publicações sem precisar acessar cada
-            instância separadamente. A origem de cada recurso continua explícita.
-          </p>
-          <RouterLink class="text-link" to="/federation">
-            Conhecer a federação →
-          </RouterLink>
+          <RouterLink class="btn ghost full" to="/users">Gerenciar pessoas</RouterLink>
         </div>
       </aside>
     </div>

@@ -6,6 +6,7 @@ import {
   House,
   Network,
   Search,
+  Users,
   ShieldCheck,
   Upload,
 } from 'lucide-vue-next'
@@ -48,6 +49,11 @@ async function submitSearch() {
         <RouterLink v-if="auth.isAuthenticated" to="/feed">
           <House :size="15" />
           Feed
+        </RouterLink>
+
+        <RouterLink v-if="auth.isAuthenticated" to="/users">
+          <Users :size="15" />
+          Pessoas
         </RouterLink>
 
         <RouterLink to="/resources">

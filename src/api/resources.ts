@@ -92,6 +92,76 @@ async function fetchPleromaStatusesPage(config: ReturnType<typeof loadPleromaCon
   }
 }
 
+export async function listLocalPleromaResources(query = ''): Promise<Resource[]> {
+  const config = loadPleromaConfig()
+  if (!config.instanceUrl || !config.accessToken) return []
+
+  const resources: Resource[] = []
+  let maxId: string | undefined
+  const seen = new Set<string>()
+  const seenCursors = new Set<string>()
+  const search = query.trim().toLowerCase()
+
+  // Read the local public timeline page by page so Explorar recursos
+  // represents the complete local catalog instead of only the logged-in user.
+  for (let page = 0; page < 250; page += 1) {
+    const params = new URLSearchParams({
+      limit: '40',
+      local: 'true',
+      exclude_reblogs: 'true',
+    })
+    if (maxId) params.set('max_id', maxId)
+
+    const response = await fetch(
+      `${normalizeInstanceUrl(config.instanceUrl)}/api/v1/timelines/public?${params.toString()}`,
+      {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${config.accessToken}`,
+        },
+      },
+    )
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(`Pleroma respondeu HTTP ${response.status}${detail ? `: ${detail.slice(0, 180)}` : ''}.`)
+    }
+
+    const statuses = await response.json() as PleromaStatus[]
+    if (!statuses.length) break
+
+    for (const status of statuses) {
+      if (seen.has(status.id)) continue
+      seen.add(status.id)
+      const resource = parseResourceStatus(status, config.instanceUrl)
+      if (!resource) continue
+
+      if (!search || [
+        resource.title,
+        resource.description,
+        resource.area,
+        resource.type,
+        resource.license,
+        resource.fileName,
+        ...resource.tags,
+        ...resource.authors.map(author => author.name),
+      ].join(' ').toLowerCase().includes(search)) {
+        resources.push(resource)
+      }
+    }
+
+    const nextMaxId = statuses[statuses.length - 1]?.id
+    if (!nextMaxId || nextMaxId === maxId || seenCursors.has(nextMaxId)) break
+    seenCursors.add(nextMaxId)
+    maxId = nextMaxId
+    if (statuses.length < 40) break
+  }
+
+  return resources.sort((a, b) =>
+    (b.publishedAtTime || b.publishedAt).localeCompare(a.publishedAtTime || a.publishedAt),
+  )
+}
+
 export async function listMyPleromaResources(): Promise<Resource[]> {
   const config = loadPleromaConfig()
   if (!config.instanceUrl || !config.accessToken) return []

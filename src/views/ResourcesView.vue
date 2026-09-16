@@ -2,7 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Search, X } from 'lucide-vue-next'
-import { listResources } from '../api'
+import { listLocalPleromaResources } from '../api/resources'
 import type { Resource } from '../types'
 
 const route = useRoute()
@@ -16,7 +16,7 @@ async function searchResources(value = query.value) {
   loading.value = true
 
   try {
-    items.value = await listResources(value.trim())
+    items.value = await listLocalPleromaResources(value.trim())
   } finally {
     loading.value = false
   }
@@ -64,11 +64,10 @@ onMounted(() => searchResources(query.value))
   <div class="page resources-page">
     <div class="section-head">
       <div>
-        <div class="eyebrow">Catálogo federado</div>
+        <div class="eyebrow">Catálogo local</div>
         <h2>Explorar recursos</h2>
         <p>
-          Encontre recursos educacionais publicados nesta plataforma e em outras
-          plataformas da federação.
+          Todos os recursos educacionais publicados localmente nesta instância.
         </p>
       </div>
     </div>

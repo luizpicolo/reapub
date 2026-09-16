@@ -95,12 +95,10 @@ async function submit() {
       <div class="card">
         <div class="eyebrow">Cadastro</div>
         <h1 style="font-size:34px">Criar conta no REA.fed</h1>
-        <p class="lead" style="font-size:14px">Sua conta será criada na instância Pleroma escolhida. O REA.fed não cria uma conta paralela.</p>
+        <p class="lead" style="font-size:14px">Sua conta será criada diretamente na instância configurada pelo administrador. O REA.fed não cria uma conta paralela.</p>
 
         <form @submit.prevent="submit">
-          <div class="form-grid">
-            <div class="field"><label>Nome de usuário</label><div class="input-icon-wrap"><UserRound :size="16"/><input class="input" v-model="username" type="text" autocomplete="username" placeholder="seu_usuario" required /></div></div>
-          </div>
+          <div class="field auth-field-wide"><label for="register-username">Nome de usuário</label><div class="input-icon-wrap"><UserRound :size="18"/><input id="register-username" class="input" v-model="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="seu_usuario" required /></div></div>
           <div class="field"><label>Nome completo</label><input class="input" v-model="fullname" type="text" autocomplete="name" placeholder="Seu nome" /></div>
           <div class="field"><label>E-mail</label><div class="input-icon-wrap"><Mail :size="16"/><input class="input" v-model="email" type="email" autocomplete="email" placeholder="voce@exemplo.com" required /></div></div>
           <div class="form-grid">

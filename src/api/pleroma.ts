@@ -31,6 +31,31 @@ export interface PleromaAccount {
   url: string
   avatar?: string
   followers_count?: number
+  following_count?: number
+  note?: string
+  locked?: boolean
+  bot?: boolean
+  fields?: Array<{ name: string; value: string; verified_at?: string | null }>
+}
+
+export interface PleromaRelationship {
+  id: string
+  following: boolean
+  followed_by: boolean
+  requested?: boolean
+  blocking?: boolean
+  muting?: boolean
+  notifying?: boolean
+  show_reblogs?: boolean
+  endorsed?: boolean
+}
+
+export interface PleromaTimelineStatus extends PleromaStatus {
+  reblog?: PleromaStatus | null
+  in_reply_to_id?: string | null
+  reblogged?: boolean
+  favourited?: boolean
+  bookmarked?: boolean
 }
 
 export interface PleromaInstance {
@@ -250,6 +275,7 @@ export async function loginWithPleromaPassword(username: string, password: strin
     password,
     client_id: app.clientId,
     client_secret: app.clientSecret,
+    scope: 'read write follow',
   })
 
   const response = await fetch(`${instanceUrl}/oauth/token`, {
@@ -555,4 +581,127 @@ export async function listPleromaAccountStatuses(config: PleromaConfig, accountI
     if (batch.length < 40) break
   }
   return all
+}
+
+
+/** Real Pleroma account discovery/following API used by the social feed. */
+export async function searchPleromaAccounts(query: string, limit = 20) {
+  const q = query.trim()
+  if (!q) return [] as PleromaAccount[]
+  const params = new URLSearchParams({ q, limit: String(Math.min(limit, 40)), resolve: 'true' })
+  return apiFetch<PleromaAccount[]>(loadPleromaConfig(), `/api/v1/accounts/search?${params.toString()}`)
+}
+
+export async function getPleromaFollowingAccounts(limit = 80) {
+  const config = loadPleromaConfig()
+  const { account } = await verifyPleromaConnection(config)
+  const params = new URLSearchParams({ limit: String(Math.min(limit, 80)) })
+  return apiFetch<PleromaAccount[]>(config, `/api/v1/accounts/${encodeURIComponent(account.id)}/following?${params.toString()}`)
+}
+
+export async function getPleromaFollowersAccounts(limit = 80) {
+  const config = loadPleromaConfig()
+  const { account } = await verifyPleromaConnection(config)
+  const params = new URLSearchParams({ limit: String(Math.min(limit, 80)) })
+  return apiFetch<PleromaAccount[]>(config, `/api/v1/accounts/${encodeURIComponent(account.id)}/followers?${params.toString()}`)
+}
+
+export async function getPleromaRelationships(ids: string[]) {
+  if (!ids.length) return [] as PleromaRelationship[]
+  const config = loadPleromaConfig()
+  const params = new URLSearchParams()
+  ids.forEach(id => params.append('id[]', id))
+  return apiFetch<PleromaRelationship[]>(config, `/api/v1/accounts/relationships?${params.toString()}`)
+}
+
+export async function getPleromaRelationship(accountId: string) {
+  const relationships = await getPleromaRelationships([accountId])
+  return relationships[0] || null
+}
+
+export async function followPleromaAccount(accountId: string) {
+  const config = loadPleromaConfig()
+  const relationship = await apiFetch<PleromaRelationship>(config, `/api/v1/accounts/${encodeURIComponent(accountId)}/follow`, { method: 'POST' })
+  // Pleroma returns the local relationship immediately. For a remote account,
+  // ActivityPub delivery can still be asynchronous, so `requested` is also a
+  // valid successful state for locked/approval-based accounts.
+  if (!relationship.following && !relationship.requested) {
+    const confirmed = await getPleromaRelationship(accountId)
+    if (!confirmed?.following && !confirmed?.requested) {
+      throw new Error('A instância não confirmou o seguimento desta conta. O pedido não foi registrado como following/requested.')
+    }
+    return confirmed
+  }
+  return relationship
+}
+
+export async function unfollowPleromaAccount(accountId: string) {
+  const config = loadPleromaConfig()
+  return apiFetch<PleromaRelationship>(config, `/api/v1/accounts/${encodeURIComponent(accountId)}/unfollow`, { method: 'POST' })
+}
+
+export async function getPleromaHomeTimeline(limit = 40) {
+  const config = loadPleromaConfig()
+  const params = new URLSearchParams({ limit: String(Math.min(limit, 80)), exclude_reblogs: 'false' })
+  return apiFetch<PleromaTimelineStatus[]>(config, `/api/v1/timelines/home?${params.toString()}`)
+}
+
+export async function getPleromaLocalTimeline(limit = 40) {
+  const config = loadPleromaConfig()
+  const params = new URLSearchParams({ limit: String(Math.min(limit, 80)), local: 'true', exclude_reblogs: 'false' })
+  return apiFetch<PleromaTimelineStatus[]>(config, `/api/v1/timelines/public?${params.toString()}`)
+}
+
+export async function getPleromaGlobalTimeline(limit = 40) {
+  const config = loadPleromaConfig()
+  const params = new URLSearchParams({ limit: String(Math.min(limit, 80)), exclude_reblogs: 'false' })
+  return apiFetch<PleromaTimelineStatus[]>(config, `/api/v1/timelines/public?${params.toString()}`)
+}
+
+export async function getRemoteInstanceTimeline(instanceUrl: string, local: boolean, limit = 20) {
+  const base = normalizeInstanceUrl(instanceUrl)
+  const params = new URLSearchParams({ limit: String(Math.min(limit, 40)), exclude_reblogs: 'false' })
+  if (local) params.set('local', 'true')
+  const response = await fetch(`${base}/api/v1/timelines/public?${params.toString()}`, { headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error(await readError(response))
+  return await response.json() as PleromaTimelineStatus[]
+}
+
+/**
+ * Pleroma may return a media URL through its /proxy endpoint. When that
+ * proxy cannot fetch a remote attachment, decode the original URL embedded
+ * in the proxy path and let the browser request the remote image directly.
+ */
+export function resolvePleromaMediaUrl(url?: string) {
+  if (!url) return ''
+  try {
+    const parsed = new URL(url)
+    const parts = parsed.pathname.split('/').filter(Boolean)
+    const proxyIndex = parts.indexOf('proxy')
+    if (proxyIndex >= 0 && parts[proxyIndex + 2]) {
+      const encoded = decodeURIComponent(parts[proxyIndex + 2])
+      const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/')
+      const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4)
+      const decoded = window.atob(padded)
+      if (/^https?:\/\//i.test(decoded)) return decoded
+    }
+  } catch {
+    // Keep the original URL as a fallback for non-browser or non-standard URLs.
+  }
+  return url
+}
+
+export function accountHost(account: PleromaAccount, fallbackInstanceUrl = getConfiguredInstanceUrl()) {
+  const acct = account.acct || account.username
+  const at = acct.lastIndexOf('@')
+  if (at > 0 && acct.slice(at + 1)) return acct.slice(at + 1)
+  try { return new URL(fallbackInstanceUrl).hostname } catch { return '' }
+}
+
+export function accountInstanceUrl(account: PleromaAccount, fallbackInstanceUrl = getConfiguredInstanceUrl()) {
+  if (account.url) {
+    try { return new URL(account.url).origin } catch { /* fallback */ }
+  }
+  const host = accountHost(account, fallbackInstanceUrl)
+  return host ? `https://${host}` : normalizeInstanceUrl(fallbackInstanceUrl)
 }
