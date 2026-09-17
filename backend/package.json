@@ -1,0 +1,21 @@
+{
+  "name": "rea-fed-ipfs-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "keys": "node src/keys/create.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "dotenv": "^16.4.7",
+    "kubo-rpc-client": "^7.1.0",
+    "opentimestamps": "^0.4.6",
+    "express": "^5.1.0"
+  }
+}

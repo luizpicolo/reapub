@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { verifyResource } from '../api'
+import { verifyResourceWithIpfsApi } from '../api/ipfs'
 import type { VerificationStatus } from '../types'
 import { ShieldCheck, Upload, AlertTriangle, X, FileCheck2, FileSignature, Clock3, CheckCircle2 } from 'lucide-vue-next'
 
@@ -11,6 +11,11 @@ const ots = ref<File>()
 const result = ref<VerificationStatus>()
 const loading = ref(false)
 const error = ref('')
+
+const signatureInputId = 'verify-signature-file'
+const manifestInputId = 'verify-manifest-file'
+const otsInputId = 'verify-ots-file'
+const originalInputId = 'verify-original-file'
 
 function pick(target: 'file' | 'manifest' | 'signature' | 'ots', event: Event) {
   const selected = (event.target as HTMLInputElement).files?.[0]
@@ -40,7 +45,8 @@ async function verify() {
   result.value = undefined
   error.value = ''
   try {
-    result.value = await verifyResource(file.value, {
+    result.value = await verifyResourceWithIpfsApi({
+      file: file.value,
       manifest: manifest.value,
       signature: signature.value,
       ots: ots.value,
@@ -60,14 +66,14 @@ async function verify() {
       <h1>Comprove a autenticidade de um recurso</h1>
       <p class="lead">
         Para verificar a autoria, não basta enviar somente o arquivo original. Envie também as evidências
-        fornecidas pela plataforma de origem: <strong>manifest.js</strong>, <strong>.sig</strong> e <strong>.ots</strong>.
+        fornecidas pela plataforma de origem: <strong>manifest.json</strong>, <strong>.sig</strong> e <strong>.ots</strong>.
       </p>
 
       <div class="verification-explainer">
         <div class="explainer-icon"><ShieldCheck :size="22" /></div>
         <div>
           <strong>O que será verificado?</strong>
-          <p>O arquivo será comparado ao manifesto, a assinatura será validada e a evidência temporal será conferida pela API externa.</p>
+          <p>O arquivo será comparado ao manifesto, a assinatura será validada e a evidência temporal será conferida pelo serviço de verificação do REA.fed.</p>
         </div>
       </div>
 
@@ -80,8 +86,8 @@ async function verify() {
           <span class="required-badge">Obrigatório</span>
         </div>
 
-        <label class="dropzone dropzone-primary" :class="{ selected: file }">
-          <input type="file" @change="pick('file', $event)" />
+        <label class="dropzone dropzone-primary" :class="{ selected: file }" :for="originalInputId">
+          <input :id="originalInputId" type="file" @change="pick('file', $event)" />
           <div class="dropzone-content">
             <div class="upload-icon"><Upload :size="25" /></div>
             <strong>{{ file?.name || 'Escolha um arquivo ou arraste aqui' }}</strong>
@@ -99,24 +105,24 @@ async function verify() {
         </div>
 
         <div class="evidence-upload-grid">
-          <label class="evidence-dropzone" :class="{ selected: manifest }">
-            <input type="file" accept=".js,.json" @change="pick('manifest', $event)" />
+          <label class="evidence-dropzone" :class="{ selected: manifest }" :for="manifestInputId">
+            <input :id="manifestInputId" type="file" accept=".json,.js,application/json,text/javascript,text/plain,application/octet-stream" @change="pick('manifest', $event)" />
             <FileCheck2 :size="24" />
             <span class="evidence-type">MANIFESTO</span>
-            <strong>{{ manifest?.name || 'manifest.js' }}</strong>
+            <strong>{{ manifest?.name || 'manifest.json' }}</strong>
             <small>{{ manifest ? 'Arquivo selecionado' : 'Arraste ou clique para selecionar' }}</small>
           </label>
 
-          <label class="evidence-dropzone" :class="{ selected: signature }">
-            <input type="file" accept=".sig" @change="pick('signature', $event)" />
+          <label class="evidence-dropzone signature-dropzone" :class="{ selected: signature }" :for="signatureInputId">
+            <input :id="signatureInputId" type="file" accept="*/*" @change="pick('signature', $event)" />
             <FileSignature :size="24" />
             <span class="evidence-type">ASSINATURA</span>
             <strong>{{ signature?.name || 'arquivo.sig' }}</strong>
             <small>{{ signature ? 'Arquivo selecionado' : 'Arraste ou clique para selecionar' }}</small>
           </label>
 
-          <label class="evidence-dropzone" :class="{ selected: ots }">
-            <input type="file" accept=".ots" @change="pick('ots', $event)" />
+          <label class="evidence-dropzone" :class="{ selected: ots }" :for="otsInputId">
+            <input :id="otsInputId" type="file" accept=".ots,application/octet-stream" @change="pick('ots', $event)" />
             <Clock3 :size="24" />
             <span class="evidence-type">TIMESTAMP</span>
             <strong>{{ ots?.name || 'arquivo.ots' }}</strong>

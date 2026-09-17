@@ -55,6 +55,14 @@ export interface Resource {
   originalUrl: string
   verification: VerificationStatus
   evidence: Evidence[]
+  ipfs?: {
+    cid: string
+    url: string
+    sha256: string
+    manifestUrl?: string
+    signatureUrl?: string
+    timestampUrl?: string
+  }
   downloads: number
 }
 

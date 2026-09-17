@@ -1,3 +1,4 @@
+import { provisionUserKeys } from './ipfs'
 import type { FederationPlatform, Resource } from '../types'
 
 export interface PleromaConfig {
@@ -291,7 +292,10 @@ export async function loginWithPleromaPassword(username: string, password: strin
 
   const token = await response.json() as OAuthTokenResponse
   if (!token.access_token) throw new Error('A instância não retornou um token de acesso.')
-  return storeToken(instanceUrl, token)
+  const config = storeToken(instanceUrl, token)
+  // Provisiona a identidade criptográfica do usuário no backend após o login.
+  await provisionUserKeys(config)
+  return config
 }
 
 export interface PleromaCaptcha {
@@ -523,16 +527,34 @@ function platformFromPleroma(config: PleromaConfig, account: PleromaAccount): Fe
   return { id: host, name: host, handle: `@${account.acct}`, url: instanceUrl, description: 'Instância Pleroma conectada ao REA.fed.', status: 'online', followersCount: 0, resourcesCount: 0, isFollowing: true }
 }
 
-export async function publishResourceToPleroma(config: PleromaConfig, payload: { file: File; title: string; description: string; area: string; type: string; license: string; tags: string[]; visibility: 'public' | 'unlisted' | 'private' | 'direct' }): Promise<Resource & { status: PleromaStatus }> {
+export interface ResourceIpfsEvidence {
+  resource: { cid: string; url: string; sha256: string }
+  manifest: { cid: string; url: string; sha256: string; version: string; createdAt: string }
+  signature: { cid: string; url: string }
+  publicKey: { cid: string; url: string }
+  timestamp: { cid: string; url: string } | null
+  timestampStatus: 'created' | 'pending'
+}
+
+export async function publishResourceToPleroma(config: PleromaConfig, payload: { file: File; title: string; description: string; area: string; type: string; license: string; tags: string[]; visibility: 'public' | 'unlisted' | 'private' | 'direct'; ipfs?: ResourceIpfsEvidence }): Promise<Resource & { status: PleromaStatus }> {
   const { account } = await verifyPleromaConnection(config)
   const media = await uploadPleromaMedia(config, payload.file, payload.description)
   const hashtagText = payload.tags.filter(Boolean).map(tag => `#${tag.replace(/^#/, '').replace(/\s+/g, '_')}`).join(' ')
+  const ipfsLines = payload.ipfs ? [
+    `IPFS: ${payload.ipfs.resource.cid}`,
+    `SHA-256: ${payload.ipfs.resource.sha256}`,
+    `Manifesto: ${payload.ipfs.manifest.cid}`,
+    `Assinatura: ${payload.ipfs.signature.cid}`,
+    `Chave pública: ${payload.ipfs.publicKey.cid}`,
+    payload.ipfs.timestamp?.cid ? `Timestamp OTS: ${payload.ipfs.timestamp.cid}` : 'Timestamp OTS: pendente',
+  ] : []
   const lines = [
     `📚 ${payload.title}`,
     payload.description.trim(),
     payload.area.trim() ? `Área: ${payload.area.trim()}` : '',
     payload.type.trim() ? `Tipo: ${payload.type.trim()}` : '',
     payload.license.trim() ? `Licença: ${payload.license.trim()}` : '',
+    ...ipfsLines,
     hashtagText,
   ].filter(Boolean)
   const status = await createPleromaStatus(config, { status: lines.join('\n'), mediaId: media.id, visibility: payload.visibility })
@@ -544,8 +566,23 @@ export async function publishResourceToPleroma(config: PleromaConfig, payload: {
     publishedAt: now.slice(0, 10), publishedAtTime: now, language: 'pt-BR', area: payload.area,
     type: payload.type, license: payload.license, tags: payload.tags, fileName: payload.file.name,
     fileSize: payload.file.size, sourcePlatform: platform, originalUrl: status.url || status.uri || normalizeInstanceUrl(config.instanceUrl),
-    verification: { overall: 'pending', integrity: false, signature: false, authorship: true, timestamp: true, details: ['Arquivo enviado como anexo ao status do Pleroma.'] },
-    evidence: [], downloads: 0, status,
+    verification: {
+      overall: payload.ipfs?.timestampStatus === 'created' ? 'verified' : 'pending',
+      integrity: Boolean(payload.ipfs),
+      signature: Boolean(payload.ipfs),
+      authorship: true,
+      timestamp: payload.ipfs?.timestampStatus === 'created',
+      details: payload.ipfs
+        ? ['Arquivo registrado no IPFS com SHA-256.', 'Manifesto assinado com Ed25519.', payload.ipfs.timestamp ? 'Prova OpenTimestamps criada.' : 'Prova OpenTimestamps pendente.']
+        : ['Arquivo enviado como anexo ao status do Pleroma.'],
+    },
+    evidence: payload.ipfs ? [
+      { type: 'manifest', name: 'manifest.json', status: 'valid', value: payload.ipfs.manifest.cid, downloadUrl: payload.ipfs.manifest.url },
+      { type: 'signature', name: 'assinatura.sig', status: 'valid', value: payload.ipfs.signature.cid, downloadUrl: payload.ipfs.signature.url },
+      ...(payload.ipfs.timestamp ? [{ type: 'ots' as const, name: 'prova.ots', status: 'valid' as const, value: payload.ipfs.timestamp.cid, downloadUrl: payload.ipfs.timestamp.url }] : []),
+      { type: 'hash', name: 'SHA-256', status: 'valid', value: payload.ipfs.resource.sha256 },
+    ] : [],
+    downloads: 0, status,
   }
 }
 
