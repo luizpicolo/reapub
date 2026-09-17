@@ -3,12 +3,11 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import './style.css'
-import './styles/verification-reference.css'
+import './styles/verification-layout.css'
 
 const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
-
 
 app.mount('#app')
