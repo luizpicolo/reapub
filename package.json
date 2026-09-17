@@ -1,1 +1,27 @@
-{"scripts":{"dev":"vite","build":"vue-tsc -b && vite build","preview":"vite preview","backend:install":"npm --prefix backend install","backend:dev":"npm --prefix backend run dev","backend:start":"npm --prefix backend start","backend:keys":"npm --prefix backend run keys"},"dependencies":{"@vitejs/plugin-vue":"latest","vite":"latest","typescript":"latest","vue":"latest","vue-router":"latest","pinia":"latest","lucide-vue-next":"latest"},"devDependencies":{"vue-tsc":"latest"},"version":"1.0.0","private":true,"name":"rea-federado-frontend"}
+{
+  "name": "rea-federado-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "backend:install": "npm --prefix backend install",
+    "backend:dev": "npm --prefix backend run dev",
+    "backend:start": "npm --prefix backend start",
+    "backend:keys": "npm --prefix backend run keys"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "latest",
+    "lucide-vue-next": "latest",
+    "pinia": "latest",
+    "sweetalert2": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vue": "latest",
+    "vue-router": "latest"
+  },
+  "devDependencies": {
+    "vue-tsc": "latest"
+  }
+}
