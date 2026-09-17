@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { AlertCircle, FileText, RefreshCw, ShieldCheck } from 'lucide-vue-next'
+import { AlertCircle, FileText, RefreshCw, ShieldCheck, Pencil, Trash2 } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { listMyPleromaResources } from '../api/resources'
+import { deletePleromaResource } from '../api/resourceDeletion'
 import type { Resource } from '../types'
 
 const items = ref<Resource[]>([])
 const loading = ref(true)
 const error = ref('')
+const actionError = ref('')
+const deletingId = ref('')
+const report = ref('')
 
 async function loadResources() {
   loading.value = true
@@ -15,6 +19,28 @@ async function loadResources() {
   try { items.value = await listMyPleromaResources() }
   catch (e) { error.value = e instanceof Error ? e.message : 'Não foi possível carregar os recursos.' }
   finally { loading.value = false }
+}
+
+function statusId(resource: Resource) {
+  return resource.id.startsWith('pleroma-') ? resource.id.slice('pleroma-'.length) : ''
+}
+
+async function removeResource(resource: Resource) {
+  const id = statusId(resource)
+  if (!id || deletingId.value) return
+  if (!window.confirm(`Deseja excluir o recurso “${resource.title}”? A propagação para outros servidores será assíncrona.`)) return
+  deletingId.value = resource.id
+  actionError.value = ''
+  report.value = ''
+  try {
+    const result = await deletePleromaResource(id)
+    report.value = [result.localDeletion.details, result.federation.details, ...result.warnings].join('\n')
+    items.value = items.value.filter(item => item.id !== resource.id)
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : 'Não foi possível excluir o recurso.'
+  } finally {
+    deletingId.value = ''
+  }
 }
 
 onMounted(() => { void loadResources() })
@@ -32,6 +58,8 @@ onMounted(() => { void loadResources() })
     <div v-if="loading" class="card resource-search-state"><RefreshCw :size="26" class="spin" /><strong>Carregando todos os recursos...</strong><p>Consultando as publicações da sua conta no Pleroma.</p><small>Se a instância não responder em 15 segundos, será exibido um erro para que você possa tentar novamente.</small></div>
     <div v-else-if="error" class="status bad"><strong><AlertCircle :size="18" /> Não foi possível carregar o dashboard</strong><p>{{ error }}</p><button class="btn ghost" type="button" @click="loadResources">Tentar novamente</button></div>
     <template v-else>
+      <div v-if="actionError" class="status bad"><strong>Erro na ação</strong><p>{{ actionError }}</p></div>
+      <div v-if="report" class="status"><strong>Relatório da exclusão</strong><p style="white-space:pre-line">{{ report }}</p></div>
       <div class="dashboard-stats">
         <div class="card dashboard-stat"><FileText :size="22" /><div><strong>{{ items.length }}</strong><span>recursos cadastrados</span></div></div>
         <div class="card dashboard-stat"><ShieldCheck :size="22" /><div><strong>{{ items.filter(r => r.verification.authorship).length }}</strong><span>com autoria identificada</span></div></div>
@@ -39,7 +67,7 @@ onMounted(() => { void loadResources() })
       <div v-if="!items.length" class="card resource-search-state"><FileText :size="28" /><strong>Nenhum recurso cadastrado</strong><p>Publique um arquivo para que ele apareça aqui automaticamente.</p><RouterLink class="btn primary" to="/resources/new">Publicar primeiro recurso</RouterLink></div>
       <div v-else class="card" style="padding:0;overflow:hidden">
         <table class="table"><thead><tr><th>Recurso</th><th>Arquivo</th><th>Publicado</th><th>Integridade</th><th>Ação</th></tr></thead><tbody>
-          <tr v-for="r in items" :key="r.id"><td><strong>{{ r.title }}</strong><div style="font-size:11px;color:#78827d">{{ r.area || 'Sem área' }} · {{ r.type }}</div></td><td>{{ r.fileName }}</td><td>{{ r.publishedAt }}</td><td><span v-if="r.verification.integrity">✓ Verificado</span><span v-else style="color:#78827d">Pendente</span></td><td><RouterLink :to="`/resources/${r.id}`">Visualizar</RouterLink></td></tr>
+          <tr v-for="r in items" :key="r.id"><td><strong>{{ r.title }}</strong><div style="font-size:11px;color:#78827d">{{ r.area || 'Sem área' }} · {{ r.type }}</div></td><td>{{ r.fileName }}</td><td>{{ r.publishedAt }}</td><td><span v-if="r.verification.integrity">✓ Verificado</span><span v-else style="color:#78827d">Pendente</span></td><td style="display:flex;gap:8px;align-items:center"><RouterLink :to="`/resources/${r.id}?edit=1`" title="Editar recurso"><Pencil :size="16" /> Editar</RouterLink><button class="btn ghost" type="button" :disabled="deletingId === r.id" @click="removeResource(r)"><Trash2 :size="16" /> {{ deletingId === r.id ? 'Excluindo...' : 'Excluir' }}</button></td></tr>
         </tbody></table>
       </div>
     </template>
