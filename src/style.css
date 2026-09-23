@@ -289,8 +289,7 @@ a {
   box-shadow: 0 0 0 3px #dceae0
 }
 
-.form {
-}
+.form {}
 
 .form-grid {
   display: grid;
@@ -2004,6 +2003,7 @@ footer {
     line-height: 1.6;
   }
 }
+
 .resource-catalog-meta {
   display: flex;
   justify-content: space-between;
@@ -2028,20 +2028,26 @@ footer {
   border-radius: 14px;
   background: #fff;
 }
+
 .identity-verify-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
 }
+
 .identity-verify-head p,
 .identity-result p {
   margin: 5px 0 0;
   color: #68756e;
-  font-size: 13px;
+  font-size: 8px;
   line-height: 1.45;
 }
-.identity-verify-button { flex-shrink: 0; }
+
+.identity-verify-button {
+  flex-shrink: 0;
+}
+
 .identity-result {
   display: flex;
   gap: 10px;
@@ -2050,15 +2056,29 @@ footer {
   padding: 12px;
   border-radius: 10px;
 }
-.identity-result-ok { background: #edf8f0; color: #23623c; }
-.identity-result-pending { background: #fff7df; color: #7a5b16; }
-.identity-result-bad { background: #fff0ee; color: #9f3328; }
+
+.identity-result-ok {
+  background: #edf8f0;
+  color: #23623c;
+}
+
+.identity-result-pending {
+  background: #fff7df;
+  color: #7a5b16;
+}
+
+.identity-result-bad {
+  background: #fff0ee;
+  color: #9f3328;
+}
+
 .identity-checks {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
+
 .identity-checks span {
   display: inline-flex;
   align-items: center;
@@ -2067,23 +2087,94 @@ footer {
   border-radius: 999px;
   background: #f3f5f3;
   color: #7a847f;
-  font-size: 12px;
-}
-.identity-checks span.valid { background: #e8f5eb; color: #28613f; }
-.identity-source { margin-top: 10px; color: #7a847f; font-size: 11px; }
-.spin { animation: rea-spin .9s linear infinite; }
-@keyframes rea-spin { to { transform: rotate(360deg); } }
-@media (max-width: 700px) {
-  .identity-verify-head { flex-direction: column; align-items: stretch; }
-  .identity-verify-button { width: 100%; }
+  font-size: 8px;
 }
 
-.identity-checks-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.identity-step { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border: 1px solid #e3e8e4; border-radius: 10px; background: #f7f9f7; color: #66716b; }
-.identity-step-icon { display: inline-flex; margin-top: 1px; }
-.identity-step span:last-child { display: flex; flex-direction: column; min-width: 0; }
-.identity-step small { margin-top: 3px; line-height: 1.35; color: #7b8580; }
-.identity-step-valid { background: #edf8f0; border-color: #cfe7d5; color: #28613f; }
-.identity-step-invalid { background: #fff0ee; border-color: #f0d0cb; color: #9f3328; }
-.identity-step-pending { background: #fff7df; border-color: #eadba7; color: #7a5b16; }
-@media (max-width: 700px) { .identity-checks-steps { grid-template-columns: 1fr; } }
+.identity-checks span.valid {
+  background: #e8f5eb;
+  color: #28613f;
+}
+
+.identity-source {
+  margin-top: 10px;
+  color: #7a847f;
+  font-size: 11px;
+}
+
+.spin {
+  animation: rea-spin .9s linear infinite;
+}
+
+@keyframes rea-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 700px) {
+  .identity-verify-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .identity-verify-button {
+    width: 100%;
+  }
+}
+
+.identity-checks-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.identity-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid #e3e8e4;
+  border-radius: 10px;
+  background: #f7f9f7;
+  color: #66716b;
+}
+
+.identity-step-icon {
+  display: inline-flex;
+  margin-top: 1px;
+}
+
+.identity-step span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.identity-step small {
+  margin-top: 3px;
+  line-height: 1.35;
+  color: #7b8580;
+}
+
+.identity-step-valid {
+  background: #edf8f0;
+  border-color: #cfe7d5;
+  color: #28613f;
+}
+
+.identity-step-invalid {
+  background: #fff0ee;
+  border-color: #f0d0cb;
+  color: #9f3328;
+}
+
+.identity-step-pending {
+  background: #fff7df;
+  border-color: #eadba7;
+  color: #7a5b16;
+}
+
+@media (max-width: 700px) {
+  .identity-checks-steps {
+    grid-template-columns: 1fr;
+  }
+}

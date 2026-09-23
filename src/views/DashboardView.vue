@@ -40,4 +40,76 @@ async function removeResource(r: Resource) {
 
 onMounted(() => void loadResources())
 </script>
-<template><div class="page"><div class="section-head"><div><div class="eyebrow">Área do autor</div><h2>Meus recursos</h2><p>Todos os recursos publicados pelo REA.fed na sua conta Pleroma.</p></div><div style="display:flex;gap:10px;align-items:center"><button type="button" class="btn ghost" :disabled="loading" @click="loadResources"><RefreshCw :size="16"/> Atualizar</button><RouterLink class="btn primary" to="/resources/new">+ Novo recurso</RouterLink></div></div><div v-if="loading" class="card resource-search-state"><RefreshCw :size="26" class="spin"/><strong>Carregando...</strong></div><div v-else-if="error" class="status bad"><strong><AlertCircle :size="18"/> Erro</strong><p>{{error}}</p><button type="button" class="btn ghost" @click="loadResources">Tentar novamente</button></div><template v-else><div class="dashboard-stats"><div class="card dashboard-stat"><FileText :size="22"/><div><strong>{{items.length}}</strong><span>recursos cadastrados</span></div></div><div class="card dashboard-stat"><ShieldCheck :size="22"/><div><strong>{{items.filter(r=>r.verification.authorship).length}}</strong><span>com autoria identificada</span></div></div></div><div v-if="!items.length" class="card resource-search-state"><FileText :size="28"/><strong>Nenhum recurso cadastrado</strong></div><div v-else class="card" style="padding:0;overflow:hidden"><table class="table"><thead><tr><th>Recurso</th><th>Arquivo</th><th>Publicado</th><th>Integridade</th><th>Ação</th></tr></thead><tbody><tr v-for="r in items" :key="r.id"><td><strong>{{r.title}}</strong><div style="font-size:11px;color:#78827d">{{r.area||'Sem área'}} · {{r.type}}</div></td><td>{{r.fileName}}</td><td>{{r.publishedAt}}</td><td>{{r.verification.integrity?'✓ Verificado':'Pendente'}}</td><td style="display:flex;gap:8px;align-items:center"><RouterLink :to="`/resources/${r.id}`" title="Visualizar recurso" @click.stop><Eye :size="16"/> Visualizar</RouterLink><a href="#" title="Editar recurso" @click.prevent.stop="editResource(r)"><Pencil :size="16"/> Editar</a><button type="button" class="btn ghost" :disabled="deletingId===r.id" @click.stop="removeResource(r)"><Trash2 :size="16"/> Excluir</button></td></tr></tbody></table></div></template></div></template>
+<template>
+  <div class="page">
+    <div class="section-head">
+      <div>
+        <div class="eyebrow">Área do autor</div>
+        <h2>Meus recursos</h2>
+        <p>Todos os recursos publicados pelo REA.fed na sua conta Pleroma.</p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center"><button type="button" class="btn ghost" :disabled="loading"
+          @click="loadResources">
+          <RefreshCw :size="16" /> Atualizar
+        </button>
+        <RouterLink class="btn primary" to="/resources/new">+ Novo recurso</RouterLink>
+      </div>
+    </div>
+    <div v-if="loading" class="card resource-search-state">
+      <RefreshCw :size="26" class="spin" /><strong>Carregando...</strong>
+    </div>
+    <div v-else-if="error" class="status bad"><strong>
+        <AlertCircle :size="18" /> Erro
+      </strong>
+      <p>{{ error }}</p><button type="button" class="btn ghost" @click="loadResources">Tentar novamente</button>
+    </div><template v-else>
+      <div class="dashboard-stats">
+        <div class="card dashboard-stat">
+          <FileText :size="22" />
+          <div><strong>{{ items.length }}</strong><span>recursos cadastrados</span></div>
+        </div>
+        <div class="card dashboard-stat">
+          <ShieldCheck :size="22" />
+          <div><strong>{{items.filter(r => r.verification.authorship).length}}</strong><span>com autoria
+              identificada</span></div>
+        </div>
+      </div>
+      <div v-if="!items.length" class="card resource-search-state">
+        <FileText :size="28" /><strong>Nenhum recurso cadastrado</strong>
+      </div>
+      <div v-else class="card" style="padding:0;overflow:hidden">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Recurso</th>
+              <th>Arquivo</th>
+              <th>Publicado</th>
+              <th>Integridade</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in items" :key="r.id">
+              <td><strong>{{ r.title }}</strong>
+                <div style="font-size:11px;color:#78827d">{{ r.area || 'Sem área' }} · {{ r.type }}</div>
+              </td>
+              <td>{{ r.fileName }}</td>
+              <td>{{ r.publishedAt }}</td>
+              <td>{{ r.verification.integrity ? '✓ Verificado' : 'Pendente' }}</td>
+              <td style="display:flex;gap:8px;align-items:center">
+                <RouterLink :to="`/resources/${r.id}`" title="Visualizar recurso" @click.stop>
+                  <Eye :size="16" /> Visualizar
+                </RouterLink><a href="#" title="Editar recurso" @click.prevent.stop="editResource(r)">
+                  <Pencil :size="16" /> Editar
+                </a><button type="button" class="btn ghost" :disabled="deletingId === r.id"
+                  @click.stop="removeResource(r)">
+                  <Trash2 :size="16" /> Excluir
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+  </div>
+</template>
